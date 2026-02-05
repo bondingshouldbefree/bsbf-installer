@@ -37,16 +37,16 @@ done
 
 BSBF_RESOURCES="https://raw.githubusercontent.com/bondingshouldbefree/bsbf-resources/refs/heads/main"
 
-# Install sing-box and its configuration.
-curl -fsSL https://sing-box.app/install.sh | sh
-curl -s $BSBF_RESOURCES/resources-client/sing-box.json \
+# Install v2ray and its configuration.
+curl -fsSL https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh | sudo bash
+curl -s $BSBF_RESOURCES/resources-client/v2ray.json \
   | jq --arg SERVER "$server_ipv4" \
        --argjson PORT "$server_port" \
        --arg UUID "$uuid" '
-        .outbounds[0].server = $SERVER
-      | .outbounds[0].server_port = $PORT
-      | .outbounds[0].uuid = $UUID' \
-  | sudo tee /etc/sing-box/bsbf-bonding.json > /dev/null
+        .outbounds[0].settings.vnext[0].address = $SERVER
+      | .outbounds[0].settings.vnext[0].port = $PORT
+      | .outbounds[0].settings.vnext[0].users[0].id = $UUID' \
+  | sudo tee /usr/local/etc/v2ray/bsbf-bonding.json > /dev/null
 
 # Install ethtool, fping, and usb-modeswitch.
 sudo apt update
@@ -79,8 +79,15 @@ sudo curl $BSBF_RESOURCES/resources-client/bsbf-mptcp-backup.service -o /usr/lib
 sudo curl $BSBF_RESOURCES/resources-client/bsbf-route.service -o /usr/lib/systemd/system/bsbf-route.service
 
 # Enable and (re)start systemd services.
-sudo systemctl enable bsbf-mptcp-backup bsbf-route sing-box@bsbf-bonding
-sudo systemctl restart bsbf-mptcp-backup bsbf-route sing-box@bsbf-bonding
+sudo systemctl enable bsbf-mptcp-backup bsbf-route v2ray@bsbf-bonding
+sudo systemctl restart bsbf-mptcp-backup bsbf-route v2ray@bsbf-bonding
+
+# (Re)install ip rule and route.
+# TODO: These commands must run after v2ray@bsbf-bonding. Make a systemd service?
+# TODO: Move bsbf-bonding.nft to bsbf-resources/resources-client.
+sudo nft -f bsbf-bonding.nft
+sudo ip rule add fwmark 1 table 100 priority 0
+sudo ip route add local default dev lo table 100
 
 # Restart NetworkManager to apply the TCP-in-UDP dispatcher script.
 sudo systemctl restart NetworkManager
